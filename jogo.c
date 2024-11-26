@@ -1,220 +1,268 @@
-#include <stdio.h>
 #include <conio.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <locale.h>
 #include <time.h> // Para gerar números aleatórios
 
-#define WIDTH 40  // Largura do tabuleiro
-#define HEIGHT 20 // Altura do tabuleiro
+#define LARGURA 40  // Largura do tabuleiro
+#define ALTURA 20 // Altura do tabuleiro
 #define PACMAN 'C'
-#define WALL '#'
-#define FOOD '.'
-#define EMPTY ' '
-#define DEMON 'X'
+#define PAREDE '#'
+#define COMIDA '.'
+#define VAZIO ' '
+#define DEMONIO 'X'
 
-// Variáveis globais
-int i, j, k, f;
-int res = 0;
-int score = 0;
-int pacman_x, pacman_y;
-char board[HEIGHT][WIDTH];
-int food = 0;
-int curr = 0;
-int demon_x[8], demon_y[8]; // Posições dos demônios (até 8 demônios)
-int demon_count;            // Número de demônios
-int current_level = 0;      // Nível atual do jogo
-int total_levels = 5;       // Total de níveis
-int move_counter = 0;       // Contador para controlar a movimentação dos demônios
-const int base_food_count = 10; // Quantidade inicial de comida
-const int move_delay = 3;       // Reduzido para tornar os demônios mais rápidos
+// Definição da struct para o estado do jogo
+typedef struct {
+    int pacman_x, pacman_y;
+    int pontuacao;
+    int comida;
+    int nivel_atual;
+    int contagem_demonios;
+    int contador_movimentos;
+    int **posicoes_comida;
+    char **tabuleiro;
+    int *demonio_x, *demonio_y;
+} EstadoJogo;
 
-// Matriz auxiliar para rastrear alimentos
-int food_positions[HEIGHT][WIDTH] = {0};
+// Definir o estado inicial do jogo
+EstadoJogo jogo;
+int i, j, f, k;
 
 // Função para inicializar o jogo
-void initialize() {
-    // Limpa o tabuleiro e a matriz de alimentos
-    for (i = 0; i < HEIGHT; i++) {
-        for (j = 0; j < WIDTH; j++) {
-            board[i][j] = EMPTY;
-            food_positions[i][j] = 0;
+void inicializar() {
+    // Aloca dinamicamente a memória para o tabuleiro e a matriz de alimentos
+    jogo.tabuleiro = (char*)malloc(ALTURA * sizeof(char));
+    for (i = 0; i < ALTURA; i++) {
+        jogo.tabuleiro[i] = (char*)malloc(LARGURA * sizeof(char));
+    }
+
+    jogo.posicoes_comida = (int*)malloc(ALTURA * sizeof(int));
+    for (i = 0; i < ALTURA; i++) {
+        jogo.posicoes_comida[i] = (int*)malloc(LARGURA * sizeof(int));
+    }
+
+    // Inicializa as variáveis
+    for (i = 0; i < ALTURA; i++) {
+        for (j = 0; j < LARGURA; j++) {
+            jogo.tabuleiro[i][j] = VAZIO;
+            jogo.posicoes_comida[i][j] = 0;
         }
     }
 
     // Colocando paredes como limite do jogo
-    for (i = 0; i < HEIGHT; i++) {
-        board[i][0] = WALL;
-        board[i][WIDTH - 1] = WALL;
+    for (i = 0; i < ALTURA; i++) {
+        jogo.tabuleiro[i][0] = PAREDE;
+        jogo.tabuleiro[i][LARGURA - 1] = PAREDE;
     }
-    for (j = 0; j < WIDTH; j++) {
-        board[0][j] = WALL;
-        board[HEIGHT - 1][j] = WALL;
+    for (j = 0; j < LARGURA; j++) {
+        jogo.tabuleiro[0][j] = PAREDE;
+        jogo.tabuleiro[ALTURA - 1][j] = PAREDE;
     }
 
     // Configurações específicas por nível
-    demon_count = 2 + current_level * 2; // Mais demônios a cada nível
-    int walls = 10 + current_level * 5;  // Mais paredes a cada nível
-    food = base_food_count + current_level * 5; // Mais comida a cada nível
+    jogo.contagem_demonios = 2 + jogo.nivel_atual * 2; // Mais demônios a cada nível
+    int paredes = 10 + jogo.nivel_atual * 5;  // Mais paredes a cada nível
+    jogo.comida = 10 + jogo.nivel_atual * 5; // Mais comida a cada nível
+
+    // Aloca dinamicamente a memória para as posições dos demônios
+    jogo.demonio_x = (int*)malloc(jogo.contagem_demonios * sizeof(int));
+    jogo.demonio_y = (int*)malloc(jogo.contagem_demonios * sizeof(int));
 
     // Coloca paredes aleatórias
-    while (walls--) {
-        int row = (rand() % (HEIGHT - 2)) + 1;
-        int col = (rand() % (WIDTH - 2)) + 1;
-        if (board[row][col] == EMPTY) {
-            board[row][col] = WALL;
+    while (paredes--) {
+        int linha = (rand() % (ALTURA - 2)) + 1;
+        int coluna = (rand() % (LARGURA - 2)) + 1;
+        if (jogo.tabuleiro[linha][coluna] == VAZIO) {
+            jogo.tabuleiro[linha][coluna] = PAREDE;
         }
     }
 
     // Coloca alimentos aleatórios
-    for (f = food; f > 0;) {
-        int row, col;
+    for (f = jogo.comida; f > 0;) {
+        int linha, coluna;
         do {
-            row = rand() % (HEIGHT - 2) + 1;
-            col = rand() % (WIDTH - 2) + 1;
-        } while (board[row][col] != EMPTY || food_positions[row][col] == 1);
-        board[row][col] = FOOD;
-        food_positions[row][col] = 1; // Marca a posição do alimento
+            linha = rand() % (ALTURA - 2) + 1;
+            coluna = rand() % (LARGURA - 2) + 1;
+        } while (jogo.tabuleiro[linha][coluna] != VAZIO || jogo.posicoes_comida[linha][coluna] == 1);
+        jogo.tabuleiro[linha][coluna] = COMIDA;
+        jogo.posicoes_comida[linha][coluna] = 1; // Marca a posição do alimento
         f--;
     }
 
     // Coloca demônios aleatórios
-    for (k = 0; k < demon_count; k++) {
+    for (k = 0; k < jogo.contagem_demonios; k++) {
         do {
-            demon_x[k] = rand() % (WIDTH - 2) + 1;
-            demon_y[k] = rand() % (HEIGHT - 2) + 1;
-        } while (board[demon_y[k]][demon_x[k]] != EMPTY);
-        board[demon_y[k]][demon_x[k]] = DEMON;
+            jogo.demonio_x[k] = rand() % (LARGURA - 2) + 1;
+            jogo.demonio_y[k] = rand() % (ALTURA - 2) + 1;
+        } while (jogo.tabuleiro[jogo.demonio_y[k]][jogo.demonio_x[k]] != VAZIO);
+        jogo.tabuleiro[jogo.demonio_y[k]][jogo.demonio_x[k]] = DEMONIO;
     }
 
     // Define a posição inicial do Pac-Man
-    pacman_x = WIDTH / 2;
-    pacman_y = HEIGHT / 2;
-    board[pacman_y][pacman_x] = PACMAN;
+    jogo.pacman_x = LARGURA / 2;
+    jogo.pacman_y = ALTURA / 2;
+    jogo.tabuleiro[jogo.pacman_y][jogo.pacman_x] = PACMAN;
 }
 
 // Função para desenhar o jogo
-void draw() {
+void desenhar() {
     system("cls");
-    printf("Fase: %d\n", current_level + 1);
-    for (i = 0; i < HEIGHT; i++) {
-        for (j = 0; j < WIDTH; j++) {
-            printf("%c", board[i][j]);
+    printf("Fase: %d\n", jogo.nivel_atual + 1);
+    for (i = 0; i < ALTURA; i++) {
+        for (j = 0; j < LARGURA; j++) {
+            if (jogo.tabuleiro[i][j] == PAREDE) {
+                printf("\033[44m\033[34m%c\033[0m", jogo.tabuleiro[i][j]); // Fundo azul, texto branco
+            } else if (jogo.tabuleiro[i][j] == PACMAN) {
+                printf("\033[43m\033[33m%c\033[0m", jogo.tabuleiro[i][j]); // Fundo amarelo, texto amarelo
+            } else if (jogo.tabuleiro[i][j] == COMIDA) {
+                printf("\033[32m%c\033[0m", jogo.tabuleiro[i][j]); // Fundo verde, texto verde
+            } else if (jogo.tabuleiro[i][j] == DEMONIO) {
+                printf("\033[41m\033[31m%c\033[0m", jogo.tabuleiro[i][j]); // Fundo vermelho, texto vermelho
+            } else {
+                printf("%c", jogo.tabuleiro[i][j]); // Caracteres padrão
+            }
         }
         printf("\n");
     }
-    printf("Score: %d\n", score);
-    printf("Alimentos restantes: %d\n", food);
+    printf("Pontuação: %d\n", jogo.pontuacao);
+    printf("Alimentos restantes: %d\n", jogo.comida);
 }
 
 // Função para mover o Pac-Man
-void move(int move_x, int move_y) {
-    int x = pacman_x + move_x;
-    int y = pacman_y + move_y;
+void mover(int movimento_x, int movimento_y) {
+    int x = jogo.pacman_x + movimento_x;
+    int y = jogo.pacman_y + movimento_y;
 
-    if (board[y][x] != WALL) {
-        if (board[y][x] == FOOD) {
-            score++;
-            food--;
-            curr++;
-            food_positions[y][x] = 0; // Remove a marcação do alimento
-            if (food <= 0) {
-                current_level++;
-                if (current_level < total_levels) {
-                    initialize(); // Próximo nível
+    if (jogo.tabuleiro[y][x] != PAREDE) {
+        if (jogo.tabuleiro[y][x] == COMIDA) {
+            jogo.pontuacao++;
+            jogo.comida--;
+            jogo.posicoes_comida[y][x] = 0; // Remove a marcação do alimento
+            if (jogo.comida <= 0) {
+                jogo.nivel_atual++;
+                if (jogo.nivel_atual < 5) {
+                    inicializar(); // Próximo nível
                 } else {
-                    res = 2; // Vitória
+                    printf("Parabéns! Você venceu todas as fases.\nSua pontuação: %d\n", jogo.pontuacao);
+                    exit(0); // Vitória
                 }
                 return;
             }
         }
 
-        if (board[y][x] == DEMON) {
-            res = 1; // Derrota
+        if (jogo.tabuleiro[y][x] == DEMONIO) {
+            printf("Game Over! Você foi pego pelos demônios.\nSua pontuação: %d\n", jogo.pontuacao);
+            exit(0); // Derrota
         }
 
-        board[pacman_y][pacman_x] = EMPTY;
-        pacman_x = x;
-        pacman_y = y;
-        board[pacman_y][pacman_x] = PACMAN;
+        jogo.tabuleiro[jogo.pacman_y][jogo.pacman_x] = VAZIO;
+        jogo.pacman_x = x;
+        jogo.pacman_y = y;
+        jogo.tabuleiro[jogo.pacman_y][jogo.pacman_x] = PACMAN;
     }
 }
 
 // Função para mover os demônios
-void moveDemons() {
-    move_counter++;
+void moverDemonios() {
+    jogo.contador_movimentos++;
 
-    if (move_counter >= move_delay) {
-        for (k = 0; k < demon_count; k++) {
-            int move_x, move_y;
+    if (jogo.contador_movimentos >= 3) {
+        for (k = 0; k < jogo.contagem_demonios; k++) {
+            int movimento_x, movimento_y;
 
-            if (pacman_x > demon_x[k]) move_x = 1;
-            else if (pacman_x < demon_x[k]) move_x = -1;
-            else move_x = 0;
+            if (jogo.pacman_x > jogo.demonio_x[k]) movimento_x = 1;
+            else if (jogo.pacman_x < jogo.demonio_x[k]) movimento_x = -1;
+            else movimento_x = 0;
 
-            if (pacman_y > demon_y[k]) move_y = 1;
-            else if (pacman_y < demon_y[k]) move_y = -1;
-            else move_y = 0;
+            if (jogo.pacman_y > jogo.demonio_y[k]) movimento_y = 1;
+            else if (jogo.pacman_y < jogo.demonio_y[k]) movimento_y = -1;
+            else movimento_y = 0;
 
-            if (board[demon_y[k] + move_y][demon_x[k] + move_x] != WALL &&
-                board[demon_y[k] + move_y][demon_x[k] + move_x] != DEMON) {
+            if (jogo.tabuleiro[jogo.demonio_y[k] + movimento_y][jogo.demonio_x[k] + movimento_x] != PAREDE &&
+                jogo.tabuleiro[jogo.demonio_y[k] + movimento_y][jogo.demonio_x[k] + movimento_x] != DEMONIO) {
                 // Restaura alimentos se demônios saírem de suas posições
-                if (food_positions[demon_y[k]][demon_x[k]] == 1) {
-                    board[demon_y[k]][demon_x[k]] = FOOD;
+                if (jogo.posicoes_comida[jogo.demonio_y[k]][jogo.demonio_x[k]] == 1) {
+                    jogo.tabuleiro[jogo.demonio_y[k]][jogo.demonio_x[k]] = COMIDA;
                 } else {
-                    board[demon_y[k]][demon_x[k]] = EMPTY;
+                    jogo.tabuleiro[jogo.demonio_y[k]][jogo.demonio_x[k]] = VAZIO;
                 }
 
-                demon_x[k] += move_x;
-                demon_y[k] += move_y;
+                jogo.demonio_x[k] += movimento_x;
+                jogo.demonio_y[k] += movimento_y;
 
-                if (pacman_y == demon_y[k] && pacman_x == demon_x[k]) {
-                    res = 1;
+                if (jogo.pacman_y == jogo.demonio_y[k] && jogo.pacman_x == jogo.demonio_x[k]) {
+                    printf("Game Over! Você foi pego pelos demônios.\nSua pontuação: %d\n", jogo.pontuacao);
+                    exit(0); // Derrota
                 } else {
-                    board[demon_y[k]][demon_x[k]] = DEMON;
+                    jogo.tabuleiro[jogo.demonio_y[k]][jogo.demonio_x[k]] = DEMONIO;
                 }
             }
         }
-        move_counter = 0; // Reseta o contador
+        jogo.contador_movimentos = 0; // Reseta o contador
     }
+}
+
+// Função para exibir o menu e obter a escolha
+int exibirMenu() {
+    int opcao;
+    system("cls");
+    printf("MENU PRINCIPAL\n");
+    printf("1 - Iniciar jogo\n");
+    printf("2 - Ver controles\n");
+    printf("3 - Sair\n");
+    printf("Escolha uma opção: ");
+    scanf("%d", &opcao);
+    return opcao;
 }
 
 // Função principal
 int main() {
     srand(time(NULL));
-    initialize();
 
-    char ch;
-    
     setlocale(LC_ALL, "Portuguese");
-    printf("Use as teclas: w (cima), a (esquerda), d (direita), s (baixo)\n");
-    printf("Pressione q para sair\n");
+
+    int opcao;
 
     while (1) {
-        draw();
+        opcao = exibirMenu();
 
-        if (res == 1) {
-            system("cls");
-            printf("Game Over! Você foi pego pelos demônios.\nSua pontuação: %d\n", score);
-            return 0;
-        }
-
-        if (res == 2) {
-            system("cls");
-            printf("Parabéns! Você venceu todas as fases.\nSua pontuação: %d\n", score);
-            return 0;
-        }
-
-        moveDemons();
-
-        ch = getch();
-        switch (ch) {
-            case 'w': move(0, -1); break;
-            case 's': move(0, 1); break;
-            case 'a': move(-1, 0); break;
-            case 'd': move(1, 0); break;
-            case 'q':
-                printf("Jogo encerrado. Pontuação: %d\n", score);
+        switch (opcao) {
+            case 1:
+                jogo.nivel_atual = 0;
+                jogo.pontuacao = 0;
+                inicializar();
+                while (1) {
+                    desenhar();
+                    moverDemonios();
+                    char ch = getch();
+                    switch (ch) {
+                        case 'w': mover(0, -1); break;
+                        case 's': mover(0, 1); break;
+                        case 'a': mover(-1, 0); break;
+                        case 'd': mover(1, 0); break;
+                        case 'q':
+                            printf("Jogo encerrado. Pontuação: %d\n", jogo.pontuacao);
+                            return 0;
+                    }
+                }
+                break;
+            case 2:
+                printf("Controles:\n");
+                printf("w - Mover para cima\n");
+                printf("s - Mover para baixo\n");
+                printf("a - Mover para a esquerda\n");
+                printf("d - Mover para a direita\n");
+                printf("q - Sair do jogo\n");
+                system("pause");
+                break;
+            case 3:
+                printf("Saindo... Obrigado por jogar!\n");
                 return 0;
+            default:
+                printf("Opção inválida! Tente novamente.\n");
+                system("pause");
+                break;
         }
     }
 
