@@ -32,12 +32,12 @@ int i, j, f, k;
 // Função para inicializar o jogo
 void inicializar() {
     // Aloca dinamicamente a memória para o tabuleiro e a matriz de alimentos
-    jogo.tabuleiro = (char*)malloc(ALTURA * sizeof(char));
+    jogo.tabuleiro = (char*)malloc(ALTURA * sizeof(char));  // Um array de ponteiros
     for (i = 0; i < ALTURA; i++) {
         jogo.tabuleiro[i] = (char*)malloc(LARGURA * sizeof(char));
     }
 
-    jogo.posicoes_comida = (int*)malloc(ALTURA * sizeof(int));
+    jogo.posicoes_comida = (int*)malloc(ALTURA * sizeof(int));  // Um array de ponteiros
     for (i = 0; i < ALTURA; i++) {
         jogo.posicoes_comida[i] = (int*)malloc(LARGURA * sizeof(int));
     }
@@ -50,7 +50,7 @@ void inicializar() {
         }
     }
 
-    // Colocando paredes como limite do jogo
+    // Paredes como limite do jogo
     for (i = 0; i < ALTURA; i++) {
         jogo.tabuleiro[i][0] = PAREDE;
         jogo.tabuleiro[i][LARGURA - 1] = PAREDE;
